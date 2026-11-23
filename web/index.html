@@ -370,11 +370,12 @@
     </details>
     <div id="mp">
       <h2>Play a friend</h2>
-      <p class="lede">One against one over a direct connection: you send an invite link, your friend sends a code back.</p>
+      <p class="lede" id="mp-lede">One against one over a direct connection: you send an invite link, your friend sends a code back.</p>
       <div class="row" id="mp-setup">
         <button id="mp-host">Host a game</button>
         <button id="mp-join">Join with a code</button>
       </div>
+      <button id="mp-direct" class="linklike" style="display:none">Connect directly with codes instead</button>
 
       <!-- Relay (openbw_bridge): the host runs the relay and shares its address; no paste.
            Falls back to copy-paste above when you don't want to run anything. -->
@@ -406,6 +407,7 @@
         <div class="codeline">
           <input id="mp-out" type="text" spellcheck="false" autocomplete="off" readonly>
           <button id="mp-copy">Copy</button>
+          <button id="mp-share" style="display:none">Share</button>
         </div>
       </div>
 

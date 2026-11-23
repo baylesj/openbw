@@ -222,7 +222,7 @@ export class RelayLink {
         if (typeof e.data === 'string') {
           const msg = JSON.parse(e.data);
           if (msg.t === '_relay') {                       // relay meta, not a peer message
-            if (msg.peer === 'connected') this.onOpen();
+            if (msg.peer === 'connected') this.onOpen(msg);   // msg.name: the peer, if the relay knows it
             else if (msg.peer === 'left') this.onClose('peer left');
             else if (msg.error) this.onClose('relay ' + msg.error);
             return;

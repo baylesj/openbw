@@ -1813,6 +1813,7 @@ Promise.all(MAPS.slice(1).map(async (m) => {
 // starting value, and either side can change it until the countdown locks.
 const START_RACE = 1;   // Terran
 let mpLink = null, mpRole = null, mpMap = MAPS[0].file, mpPeerRace = START_RACE, mpLocked = false;
+let mpPeerName = '';   // from a relay that knows who's signed in (bayl.es); '' elsewhere
 
 // Choosing a role is one-way until it fails or the game starts. Without this, clicking
 // Host and Join in any order left both flows' panels on screen at once.
@@ -1873,7 +1874,7 @@ function mpEnterLobby() {
   mp.r[mpMine()].disabled = false;
   mp.r[mpTheirs()].disabled = true;
   mp.n[mpMine()].textContent = 'You';
-  mp.n[mpTheirs()].textContent = 'Opponent';
+  mp.n[mpTheirs()].textContent = mpPeerName || 'Opponent';
   mp.s[mpMine()].classList.add('you');
   for (const el of mp.s) el.classList.remove('open');
   mpUpdateLobby();
@@ -1946,16 +1947,17 @@ async function mpRelayHost(url) {
     const net = await mpNet();
     const hash = await mapHash(mpMap);
     mpLink = new net.RelayLink({
-      onOpen: () => {   // peer joined the relay
+      onOpen: (m) => {   // peer joined the relay
+        mpPeerName = (m && m.name) || '';
         mpLink.sendControl({ t: 'hello', v: net.PROTOCOL, map: mpMap, hash, race: +mp.r[mpMine()].value });
         mpEnterLobby();
         mpLink.sendControl({ t: 'race', race: +mp.r[mpMine()].value });
       },
       onControl: mpOnControl,
-      onClose: (why) => mpSay('Connection ' + why + '.', 'err'),
+      onClose: (why) => mpSay(mpRelayWhy(why), 'err'),
     });
     await mpLink.connect(url);
-    mpSay('Relay ready — waiting for a friend to join.');
+    mpSay('Waiting for your friend to open the link…');
   } catch (e) { mpSay(e.message, 'err'); mpResetRole(); }
 }
 
@@ -1964,6 +1966,7 @@ async function mpRelayJoin(url) {
   try {
     const net = await mpNet();
     mpLink = new net.RelayLink({
+      onOpen: (m) => { mpPeerName = (m && m.name) || ''; },
       onControl: (msg) => {
         if (msg.t === 'hello') {
           if (msg.v !== net.PROTOCOL) { mpSay(`Version mismatch (you v${net.PROTOCOL}, host v${msg.v}) — reload.`, 'err'); return; }
@@ -1977,14 +1980,55 @@ async function mpRelayJoin(url) {
         }
         mpOnControl(msg);
       },
-      onClose: (why) => mpSay('Connection ' + why + '.', 'err'),
+      onClose: (why) => mpSay(mpRelayWhy(why), 'err'),
     });
     await mpLink.connect(url);
-    mpSay('Connected to relay — waiting for the host.');
+    mpSay('Waiting for your friend\u2019s game…');
   } catch (e) { mpSay(e.message, 'err'); mpResetRole(); }
 }
 
+// --- bayl.es: invite links through a relay on the same site ----------------------------------------
+// When the site serves a relay at ./relay/ (stacks/broodwars/relay on bayl.es), "Host a game" opens a room
+// there and the invite is just a link: the friend opens it and lands in the lobby. No codes go back and
+// forth, and it works through any NAT. Without a relay (upstream's GitHub Pages) nothing changes.
+const relayBase = () => (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host +
+  location.pathname.replace(/[^/]*$/, '') + 'relay/';
+const mpRelayWhy = (why) =>
+  why === 'peer left' ? 'Your friend left the game.' :
+  why === 'relay full' ? 'That game already has two players.' :
+  'Lost the connection to the game server. Try again.';
+let mpUseRelay = false;
+fetch('./relay/health', { cache: 'no-store' }).then((r) => {
+  if (!r.ok) return;
+  if (!mpRole) {             // still choosing: make the link invite the default
+    mpUseRelay = true;
+    mp.join.style.display = 'none';
+    $('mp-direct').style.display = '';
+  }
+  $('mp-lede').textContent = 'Send a friend a link. When they open it you\u2019re both in the lobby. ' +
+    'They need an account here with access to games.';
+}).catch(() => {});
+$('mp-direct').onclick = () => {
+  mpUseRelay = false;
+  mp.join.style.display = '';
+  $('mp-direct').style.display = 'none';
+  $('mp-lede').textContent = 'Connect without the server: you send an invite link, your friend sends a code back.';
+};
+async function mpRelayInvite() {
+  mpMap = mapSelect.value;
+  const room = Array.from(crypto.getRandomValues(new Uint8Array(9)), (b) => b.toString(36).padStart(2, '0')).join('').slice(0, 14);
+  const link = location.origin + location.pathname + '#r=' + room;
+  await mpRelayHost(relayBase() + room);
+  if (mpRole !== 'host' || !mpLink) return;          // failed; mpRelayHost already said why
+  mpShow(mp.stepShare, true);
+  mp.shareHint.textContent = 'Send this link to your friend:';
+  mp.out.value = link;
+  if (navigator.share) $('mp-share').style.display = '';
+}
+$('mp-share').onclick = () => navigator.share({ title: 'Brood War', text: 'Play StarCraft: Brood War with me', url: mp.out.value }).catch(() => {});
+
 mp.host.onclick = async () => {
+  if (mpUseRelay) { mpRelayInvite().catch((e) => { mpResetRole(); mpSay(e.message, 'err'); console.error(e); }); return; }
   if (!mpSetRole('host')) return;         // guard *before* awaiting, or a second click slips in
   try {
     const net = await mpNet();
@@ -2081,6 +2125,13 @@ mp.copy.onclick = async () => {
 
 // Arriving from an invite link: the joiner pastes nothing — accept it straight away and
 // show only the response they need to send back.
+if (/^#r=[A-Za-z0-9_-]{6,40}$/.test(location.hash)) {
+  mpShow(mp.setup, false);
+  mapSelect.disabled = true;      // the host already chose
+  mpSay('Joining your friend\u2019s game…');
+  $('mp').scrollIntoView({ block: 'center' });
+  mpRelayJoin(relayBase() + location.hash.slice(3));
+}
 if (location.hash.startsWith('#i=')) {
   mpShow(mp.setup, false);
   mapSelect.disabled = true;      // arriving from an invite: the host already chose

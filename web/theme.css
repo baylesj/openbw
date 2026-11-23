@@ -285,3 +285,10 @@ html.ingame #mmframe { display: block; }
   #topbar button { width: 46px; height: 44px; }
   #mute::before, #settingsbtn::before, #helpbtn::before { width: 22px; height: 22px; }
 }
+
+/* ---- play a friend: relay invites (bayl.es) ------------------------------------------------------------ */
+button.linklike { display: block; margin: 10px 0 0; padding: 0; background: none; border: 0; box-shadow: none;
+  color: var(--ink-faint); font: 500 14px var(--font); letter-spacing: .02em; text-transform: none; }
+button.linklike:hover { color: var(--accent); box-shadow: none; text-decoration: underline; }
+#mp-share { flex: 0 0 auto; }
+#mp-lede { margin-bottom: 14px; }
