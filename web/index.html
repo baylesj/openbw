@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OpenBW Web</title>
+<title>Brood War</title>
 <link rel="icon" type="image/x-icon" href="https://archive.org/download/starcraft-brood-war_202212/Starcraft%20Brood%20War.iso/BW.ICO">
 <style>
   html, body { margin: 0; height: 100%; background: #000; color: #cbd5e1;
@@ -267,6 +267,10 @@
     #settings, #help { font-size: 15px; }
   }
 </style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="theme.css">
 </head>
 <body>
 <div id="wrap"><canvas id="screen" width="1280" height="800"></canvas></div>
@@ -313,6 +317,7 @@
   <div class="row">Pan with the screen edge, arrow keys, scroll, or the minimap</div>
   <div class="row"><kbd>Esc</kbd> cancels targeting / building placement</div>
 </div>
+<div id="mmframe"></div>
 <div id="hud"><div id="status"></div><div id="wires"></div><div id="card"></div></div>
 <div id="toast"></div>
 <div id="messages"></div>
@@ -332,30 +337,40 @@
 </div>
 
 <div id="overlay"><div class="card">
-  <h1><a id="home" href="./" title="Start over on a clean URL">OpenBW Web</a></h1>
-  <div id="bar"><i></i></div>
-  <div id="msg">Preparing…</div>
+  <header class="brand">
+    <a id="home" href="./" title="Start over on a clean URL"><span class="kicker">StarCraft</span><span class="title">Brood War</span></a>
+    <div class="sub">OpenBW, in your browser</div>
+  </header>
+  <section id="loading" class="panel">
+    <div id="bar"><i></i></div>
+    <div id="msg">Preparing…</div>
+    <div class="note">The first game downloads about 90&nbsp;MB; after that it starts from your browser's copy.</div>
+    <a class="btn again" href="./">Back to the menu</a>
+  </section>
   <div id="mobilewarn">
-    📱 Touch controls: <b>tap</b> to select, <b>drag</b> to pan, <b>long-press</b> to
+    Touch controls: <b>tap</b> to select, <b>drag</b> to pan, <b>long-press</b> to
     command (move/attack), <b>long-press&nbsp;+&nbsp;drag</b> to box-select. Best in
-    landscape. First run downloads ~90&nbsp;MB of game data.
+    landscape, with a keyboard and mouse if you have them.
   </div>
-  <div id="controls" style="display:none">
+  <div id="controls" class="panel" style="display:none">
+    <h2>Skirmish</h2>
     <div id="map-row">
       <span class="lbl">Map</span>
       <select id="map-select"></select>
-      <span id="load-wrap">or <label id="load-map" for="map-file">load map file</label></span>
-      <input type="file" id="map-file" accept=".scx,.scm" hidden>
     </div>
     <div id="map-info"></div>
     <div id="slots"></div>
-    <label id="spectate-row" style="display:flex;align-items:center;gap:8px;justify-content:center;margin:10px 0;cursor:pointer">
-      <input type="checkbox" id="spectate"> Bot vs Bot (spectate)
-    </label>
     <div id="lobby-hint" class="hint"></div>
-    <p><button id="start-game">Start Game</button></p>
+    <div class="start-row"><button id="start-game" class="primary">Start game</button></div>
+    <details class="advanced">
+      <summary>More options</summary>
+      <label class="opt" id="load-map" for="map-file">Load a map file from this computer (.scx / .scm)</label>
+      <input type="file" id="map-file" accept=".scx,.scm" hidden>
+      <label class="opt" id="spectate-row"><input type="checkbox" id="spectate"> Watch two computer players</label>
+    </details>
     <div id="mp">
-      <h2>or play a friend (1v1)</h2>
+      <h2>Play a friend</h2>
+      <p class="lede">One against one over a direct connection: you send an invite link, your friend sends a code back.</p>
       <div class="row" id="mp-setup">
         <button id="mp-host">Host a game</button>
         <button id="mp-join">Join with a code</button>
@@ -423,7 +438,6 @@
 
       <div id="mp-status"></div>
     </div>
-    <div class="hint">Or <a href="https://retroonline.net/Windows/StarCraft%3A%20Brood%20War" target="_blank" rel="noopener">play the original game</a></div>
   </div>
 </div></div>
 

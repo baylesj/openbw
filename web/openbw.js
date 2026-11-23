@@ -103,7 +103,23 @@ async function mapHash(file) {
 
 const $ = (id) => document.getElementById(id);
 const setBar = (f) => { $('bar').firstElementChild.style.width = (f * 100).toFixed(1) + '%'; };
-const setMsg = (m) => { $('msg').textContent = m; };
+// Errors reach setMsg as 'Error: <exception text>'. Show people what went wrong in their words, with the raw
+// text on hover (and in the console, where every caller also logs it).
+const friendlyError = (m) =>
+  /fetch|NetworkError|Failed to fetch|Load failed|HTTP \d/i.test(m)
+    ? 'Couldn\u2019t download the game files. Check your connection, then try again.'
+  : /QuotaExceeded|IndexedDB|idb|storage/i.test(m)
+    ? 'Your browser wouldn\u2019t store the game data (about 90 MB). Private browsing or a full disk can do that.'
+  : /WebAssembly|wasm|CompileError|LinkError/i.test(m)
+    ? 'This browser couldn\u2019t start the game engine. A current Chrome, Edge, Firefox or Safari should work.'
+  : /map/i.test(m) ? 'That map couldn\u2019t be loaded. Try another one.' : null;
+const setMsg = (m) => {
+  const el = $('msg');
+  const err = /^Error/.test(m);
+  el.textContent = err ? (friendlyError(m) || m.replace(/^Error[^:]*:\s*/, '')) : m;
+  el.title = err ? m : '';
+  el.classList.toggle('err', err);
+};
 
 // ---------------------------------------------------------------------------
 // IndexedDB cache for the MPQs
@@ -164,8 +180,12 @@ async function loadAssets(mapFile = MAP_LOCAL) {
   const totalBytes = MPQS.reduce((s, m) => s + m.size, 0);
   const got = new Array(MPQS.length).fill(0);
   const MPQ_SPAN = MPQS.length / (MPQS.length + 1);
-  const renderBar = () =>
-    setBar(Math.min(1, got.reduce((a, b) => a + b, 0) / totalBytes) * MPQ_SPAN);
+  const renderBar = () => {
+    const have = got.reduce((a, b) => a + b, 0);
+    setBar(Math.min(1, have / totalBytes) * MPQ_SPAN);
+    if (have < totalBytes)
+      setMsg(`Downloading game data: ${(have / 1e6) | 0} of ${(totalBytes / 1e6) | 0} MB`);
+  };
   setMsg(`Downloading game data (${(totalBytes / 1e6) | 0} MB)…`);
 
   await Promise.all(MPQS.map(async ({ key, local, url, size }, i) => {
@@ -173,9 +193,12 @@ async function loadAssets(mapFile = MAP_LOCAL) {
     if (!buf) {
       // Same-origin local mirror is a dev convenience; production hosts no game
       // files, so this 404s and the archive.org URL is used.
+      // (bayl.es hosts its own copy here, so read it with progress too: without it the bar sat
+      // empty for the whole 90 MB.)
+      const onProgress = (frac) => { got[i] = frac * size; renderBar(); };
       let mirror = null;
-      try { const r = await fetch(local); if (r.ok) mirror = await r.arrayBuffer(); } catch {}
-      buf = mirror || await fetchWithProgress(url, size, (frac) => { got[i] = frac * size; renderBar(); });
+      try { mirror = await fetchWithProgress(local, size, onProgress); } catch { got[i] = 0; }
+      buf = mirror || await fetchWithProgress(url, size, onProgress);
       await idbPut(db, key, buf);
     }
     got[i] = size; renderBar();
@@ -573,6 +596,10 @@ async function makeBotReplica(assets, moduleName, slots, botSlot, w, h) {
 // and a few frames of input delay. Both peers must pass an identical `slots` list.
 // Bot-vs-bot spectate adds { spectate:true, bot:{slot,module}, bot2:{slot,module} }.
 async function boot(session) {
+  // Theme hooks (theme.css): the accent follows your race; the menu gives way to the loading panel.
+  const me = session.slots.find((s) => s.slot === session.mySlot) || session.slots[0];
+  document.documentElement.dataset.race = ['zerg', 'terran', 'protoss'][me && me.race] || 'terran';
+  document.documentElement.classList.add('booting');
   // Audio is created LAZILY on the first user gesture, never during boot. The constructor
   // is a synchronous IPC to Chrome's shared audio service; on a reload the old game's
   // context is being torn down in the same renderer, and constructing a new one in that
@@ -600,6 +627,7 @@ async function boot(session) {
   const applyMute = () => {
     if (masterGain) masterGain.gain.value = muted ? 0 : 1;
     muteBtn.textContent = muted ? '🔇' : '🔊';
+    muteBtn.classList.toggle('is-muted', muted);
     muteBtn.title = muted ? 'Unmute sound' : 'Mute sound';
   };
   $('topbar').style.display = 'flex';
@@ -988,6 +1016,8 @@ async function boot(session) {
   });
 
   $('overlay').style.display = 'none';
+  document.documentElement.classList.remove('booting');
+  document.documentElement.classList.add('ingame');
 
   // Fixed-timestep simulation on a timer, rendering on requestAnimationFrame.
   // A self-rescheduling timeout (rather than setInterval) advances one frame per fire
